@@ -1,0 +1,52 @@
+import asyncio
+import websockets
+import cv2
+import numpy as np
+
+# ESP32 WebSocket Server IP and Port
+ESP32_IP = "ws://192.168.212.63:81"  # Replace with your ESP32 IP address
+
+async def stream_camera():
+    async with websockets.connect(ESP32_IP) as websocket:
+        print("Connected to WebSocket server")
+        
+        # Create a named window and set its size
+        window_name = "ESP32 Camera Stream"
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)  # Allows the window to be resizable
+        cv2.resizeWindow(window_name, 640, 480)  # Set to 640x480 for smoother display
+        
+        while True:
+            try:
+                # Receive the frame (binary data)
+                frame_data = await websocket.recv()
+                
+                # Convert the binary data to a numpy array and decode it as an image
+                np_arr = np.frombuffer(frame_data, dtype=np.uint8)
+                image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                
+                if image is not None:
+                    # Display the image using OpenCV
+                    cv2.imshow(window_name, image)
+                    
+                    # Check if the 'q' key is pressed or the window is closed
+                    if cv2.waitKey(1) & 0xFF == ord('q') or cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
+                        break
+                
+                # Introduce a small delay to avoid rapid frame processing
+                await asyncio.sleep(0.01)  # Adjust the delay (10ms) to test for smoothness
+                
+            except websockets.exceptions.ConnectionClosed:
+                print("Connection to the server was closed.")
+                break
+        
+        # Close the WebSocket connection after streaming
+        await websocket.close()
+
+# Replace this line
+# asyncio.get_event_loop().run_until_complete(stream_camera())
+
+# With this line:
+asyncio.run(stream_camera())
+
+# Release the OpenCV window after the loop ends
+cv2.destroyAllWindows()

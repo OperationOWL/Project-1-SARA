@@ -1,0 +1,63 @@
+import asyncio
+import websockets
+import cv2
+import numpy as np
+import ssl
+
+# Replace with the IP address of your ESP32 camera server
+ESP32_IP = "http://192.168.212.63"
+
+# WebSocket URI for secure connection
+WS_URI = f"wss://{ESP32_IP}:81"  # Use 'wss' for secure WebSocket
+
+# Path to your certificate file (you can download or use your certificate)
+CERT_PATH = r"C:\Dev\VIT-Project-1\Certificate\certificate.pem"
+KEY_PATH = r"C:\Dev\VIT-Project-1\Certificate\private.key"
+
+# WebSocket Client to receive the camera stream
+async def receive_camera_stream():
+    # SSL Context for secure connection
+    ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+
+    # If you have a private key, you should specify it as well
+    # ssl_context.load_cert_chain(certfile=CERT_PATH, keyfile=KEY_PATH)
+    
+    # Load just the certificate if no private key is required
+    ssl_context.load_cert_chain(certfile=CERT_PATH, keyfile=KEY_PATH)
+
+    try:
+        # Connect to the WebSocket server on ESP32
+        async with websockets.connect(WS_URI, ssl=ssl_context) as websocket:
+            print(f"Connected to {WS_URI}")
+
+            while True:
+                try:
+                    # Receive the image data (binary frame)
+                    frame_data = await websocket.recv()
+
+                    # Convert the binary data to a numpy array (image format)
+                    nparr = np.frombuffer(frame_data, np.uint8)
+                    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+                    # Display the frame in a window
+                    if frame is not None:
+                        cv2.imshow("ESP32 Camera Stream", frame)
+
+                    # Exit if 'q' is pressed
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        break
+
+                except Exception as e:
+                    print(f"Error receiving frame: {e}")
+                    break
+
+    except Exception as e:
+        print(f"Failed to connect or stream: {e}")
+
+    # Close the OpenCV window and WebSocket connection
+    cv2.destroyAllWindows()
+    print("Closed connection.")
+
+# Run the asyncio event loop
+if __name__ == "__main__":
+    asyncio.run(receive_camera_stream())
